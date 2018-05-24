@@ -18,6 +18,9 @@ const char* mqttPassword = "W3lhbe-Y94Bb";
 int pirPin = D8;
 bool motionFlag = false;
 
+String adminCards[][2] = { {"640244167","Gratsi"}, {"68210143185","Bojo"} };
+int numberCards = 2;
+
 LiquidCrystal_I2C lcd(0x3F, 16, 2); // Create LCD instance
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
 WiFiClient espClient;              // Create WiFi instance
@@ -120,7 +123,7 @@ String readCardNumber() {
 
     String ID = getCardID(mfrc522.uid.uidByte, mfrc522.uid.size);
 
-    Serial.print("New card detected\nID: %s");
+    Serial.print("New card detected\nID: ");
     Serial.println(ID);
 
     return ID;
@@ -138,9 +141,15 @@ String getCardID(byte *buffer, byte bufferSize) {
   return ID;
 }
 
-bool existingCard(String cardNumber) {
+bool existingCard(String cardNumber,String& nameUser) {
 
-  return true;
+  for(int i = 0;i <numberCards; ++i){
+    if(adminCards[i][0] == cardNumber){
+      nameUser = adminCards[i][1];
+      return true;
+    }
+  }
+  return false;
 }
 
 void printMessage(String mess, bool cleanScreen, int line) {
@@ -164,7 +173,6 @@ void detectedMotion(bool& lastDetectMotion) {
   }
 
   lastDetectMotion = true;
- // printMessage("Motion detected!", true, 0);
   Serial.println("Motion detected!");
 
   String cardNumber = readCardNumber();
@@ -188,8 +196,8 @@ void detectedMotion(bool& lastDetectMotion) {
     delay(3000);
     return;
   }
-
-  bool exist = existingCard(cardNumber);
+  String nameUser = "";
+  bool exist = existingCard(cardNumber, nameUser);
 
   if (!client.connected()) {
     connectToMQTT();
@@ -197,20 +205,21 @@ void detectedMotion(bool& lastDetectMotion) {
   client.loop();
 
   if (!exist) {
-
+    client.publish("security/motion", "Motion");
     printMessage("Invalid card!", true, 0);
     printMessage("ALARM!", false, 1);
 
     Serial.println("Invalid card!ALARM!");
 
-    client.publish("security/motion", "Motion");
+   
   } else {
-
-    String mess = "Hello " + cardNumber;
+    String mess = cardNumber + " " + nameUser;
+    
+    client.publish("security/cardNumber", mess.c_str());
     printMessage("Hello", true, 0);
-    printMessage(cardNumber, false, 1);
-    Serial.println(mess);
-    client.publish("security/cardNumber", cardNumber.c_str());
+    printMessage(nameUser, false, 1);
+    Serial.println( "Hello " + nameUser);
+    
   }
   delay(2000);
 }
