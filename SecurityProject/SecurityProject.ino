@@ -18,8 +18,10 @@ int pirPin = D8;
 bool motionFlag = false;
 bool LOCKED = true;
 
-String adminCards[][2] = { {"640244167", "Gratsi"}, {"68210143185", "Bojo"} };
-int numberCards = 2;
+String adminCard = "640244167";
+
+String memberCards[3];
+int numberCards = 0;
 
 LiquidCrystal_I2C lcd(0x3F, 16, 2); // Create LCD instance
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
@@ -134,6 +136,10 @@ String readCardNumber() {
 
     String ID = getCardID(mfrc522.uid.uidByte, mfrc522.uid.size);
 
+    if (ID == adminCard) {
+      givePermission();
+    }
+
     Serial.print("New card detected\nID: ");
     Serial.println(ID);
 
@@ -152,14 +158,17 @@ String getCardID(byte *buffer, byte bufferSize) {
   return ID;
 }
 
-bool existingCard(String cardNumber, String& nameUser) {
+bool existingCard(String cardNumber) {
 
   for (int i = 0; i < numberCards; ++i) {
-    if (adminCards[i][0] == cardNumber) {
-      nameUser = adminCards[i][1];
+    if (memberCards[i] == cardNumber) {
       return true;
     }
   }
+  if(cardNumber == adminCard) {
+    return true;
+  }
+  
   return false;
 }
 
@@ -187,8 +196,7 @@ void detectedMotion() {
   Serial.println("Motion detected!");
 
   String cardNumber = readCardNumber();
-  String nameUser = "";
-  bool exist = existingCard(cardNumber, nameUser);
+  bool exist = existingCard(cardNumber);
 
   if (WiFi.status() != WL_CONNECTED) {
     connectToWiFi();
@@ -213,14 +221,14 @@ void detectedMotion() {
     printMessage("ALARM!", false, 1);
 
     Serial.println("Invalid card!ALARM!");
-    
+
   } else {
-    String mess = cardNumber + " " + nameUser;
+    String mess = cardNumber;
 
     client.publish("security/login", mess.c_str());
     printMessage("Hello", true, 0);
-    printMessage(nameUser, false, 1);
-    Serial.println( "Hello " + nameUser);
+    printMessage(mess, false, 1);
+    Serial.println( "Hello " + mess);
     LOCKED = false;
   }
   delay(2000);
@@ -241,9 +249,12 @@ void checkOut() {
     return;
   }
 
-  String nameUser = "";
   String cardNumber = getCardID(mfrc522.uid.uidByte, mfrc522.uid.size);
-  bool exist = existingCard(cardNumber, nameUser);
+  if (cardNumber == adminCard) {
+    givePermission();
+  }
+
+  bool exist = existingCard(cardNumber);
 
   Serial.print("New card detected\nID: ");
   Serial.println(cardNumber);
@@ -255,8 +266,7 @@ void checkOut() {
     Serial.println("You have not permission!");
 
   } else {
-    String mess = cardNumber + " " + nameUser;
-
+    
     if (WiFi.status() != WL_CONNECTED) {
       connectToWiFi();
     }
@@ -265,13 +275,72 @@ void checkOut() {
     }
     client.loop();
 
-    client.publish("security/logout", mess.c_str());
+    client.publish("security/logout", cardNumber.c_str());
     printMessage("Bye", true, 0);
-    printMessage(nameUser, false, 1);
-    Serial.println( "Bye " + nameUser);
+    printMessage(cardNumber, false, 1);
+    Serial.println( "Bye " + cardNumber);
     LOCKED = true;
   }
   delay(2000);
+}
+void givePermission() {
+
+  printMessage("Scan new card!", true, 0);
+  Serial.println("Scan new card!");
+
+  delay(1000);
+
+  unsigned seconds = 5;
+  int count = 1;
+
+  while (seconds) {
+
+    lcd.setCursor(count - 1, 1);
+    lcd.print("/");
+    count++;
+
+    Serial.println(seconds);
+
+    // Look for new cards
+    if ( ! mfrc522.PICC_IsNewCardPresent()) {
+      delay(1000);
+      --seconds;
+      continue;
+    }
+
+    // Select one of the cards
+    if ( ! mfrc522.PICC_ReadCardSerial()) {
+      delay(1000);
+      --seconds;
+      continue;
+    }
+
+    String ID = getCardID(mfrc522.uid.uidByte, mfrc522.uid.size);
+
+    if (existingCard(ID)) {
+      printMessage("Card already", true, 0);
+      printMessage("exist!", false, 1);
+      break;
+    }
+    else {
+
+      if (numberCards < 3) {
+
+        memberCards[numberCards] = ID;
+        numberCards += 1;
+        printMessage("New card:", true, 0);
+        printMessage(ID, false, 1);
+
+        Serial.print("New card detected\nID: ");
+        Serial.println(ID);
+
+      } else {
+        printMessage("Memory full", true, 0);
+      }
+      break;
+    }
+  }
+  delay(3000);
 }
 
 void loop() {
