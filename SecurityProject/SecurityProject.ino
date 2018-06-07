@@ -20,8 +20,10 @@ bool LOCKED = true;
 
 String adminCard = "640244167";
 
-String memberCards[3];
+const int maxCards = 2;
+String memberCards[maxCards];
 int numberCards = 0;
+
 
 LiquidCrystal_I2C lcd(0x3F, 16, 2); // Create LCD instance
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
@@ -100,6 +102,7 @@ void setup() {
   setLCD();
   setWiFi();
   setMQTT();
+
 }
 
 String readCardNumber() {
@@ -260,10 +263,10 @@ void checkOut() {
   Serial.println(cardNumber);
 
   if (!exist) {
-    printMessage("You have not", true, 0);
+    printMessage("You have no", true, 0);
     printMessage("permission!", false, 1);
 
-    Serial.println("You have not permission!");
+    Serial.println("You have no permission!");
 
   } else {
     
@@ -285,8 +288,8 @@ void checkOut() {
 }
 void givePermission() {
 
-  printMessage("Scan new card!", true, 0);
-  Serial.println("Scan new card!");
+  printMessage("Manage card!", true, 0);
+  Serial.println("Manage card!");
 
   delay(1000);
 
@@ -318,16 +321,25 @@ void givePermission() {
     String ID = getCardID(mfrc522.uid.uidByte, mfrc522.uid.size);
 
     if (existingCard(ID)) {
-      printMessage("Card already", true, 0);
-      printMessage("exist!", false, 1);
+      for(int i = 0;i < numberCards;++i)
+      {
+        if(ID == memberCards[i])
+        {
+          memberCards[i] = memberCards[numberCards-1];
+          numberCards--;         
+          printMessage("Card removed", true, 0);       
+          printMessage(ID, false, 1);
+        }
+      }
       break;
     }
     else {
 
-      if (numberCards < 3) {
+      if (numberCards < maxCards) {
 
         memberCards[numberCards] = ID;
         numberCards += 1;
+        
         printMessage("New card:", true, 0);
         printMessage(ID, false, 1);
 
@@ -365,8 +377,4 @@ void loop() {
   } else {
     checkOut();
   }
-
 }
-
-
-
